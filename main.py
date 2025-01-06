@@ -63,10 +63,10 @@ class Board:
 		out = []
 		out.append("  ")
 		for i in range(self.N):
-			out.append("{} ".format(chr(ord("A") + i)))
+			out.append("{} ".format(col_letter(i)))
 		for i, f in enumerate(s):
 			if not i % self.N:
-				out.append("\n{:<2}".format(i // self.N + 1))
+				out.append("\n{:<2}".format(row_number(i // self.N)))
 			out.append(self.viz_tile(f))
 		return "".join(out)
 	
@@ -301,22 +301,60 @@ class Board:
 	def describe_move(self, move, player):
 		m, *args = move
 		if m == "p":
-			args = list(args)
-			args[2] = self.viz_tile(args[2])
-		elif m.startswith("i"):
-			args = list(args)
-			args[1] = self.viz_tile(args[1])
-		return self.MoveDescription[m].format(*args, player=player)
+			return "Player {} places tile {} at {}{}.".format(
+				player, 
+				self.viz_tile(args[2]), 
+				col_letter(args[0]), 
+				row_number(args[1]),
+			)
+		elif m == "fc":
+			return "Player {} flips column {}.".format(
+				player, 
+				col_letter(args[0]), 
+			)
+		elif m == "fr":
+			return "Player {} flips row {}.".format(
+				player, 
+				row_number(args[0]),
+			)
+		elif m == "it":
+			return "Player {} inserts tile {} from the top of column {}.".format(
+				player, 
+				self.viz_tile(args[1]), 
+				col_letter(args[0]), 
+			)
+		elif m == "ib":
+			return "Player {} inserts tile {} from the bottom of column {}.".format(
+				player, 
+				self.viz_tile(args[1]), 
+				col_letter(args[0]), 
+			)
+		elif m == "il":
+			return "Player {} inserts tile {} from the left of row {}.".format(
+				player, 
+				self.viz_tile(args[1]), 
+				row_number(args[0]), 
+			)
+		elif m == "ir":
+			return "Player {} inserts tile {} from the right of row {}.".format(
+				player, 
+				self.viz_tile(args[1]), 
+				row_number(args[0]), 
+			)
+		else:
+			raise ValueError(f"Unknown move: {m}")
 
 	def play_game(self, players: typing.Sized, s=None):
 		"""
-		Two players take turns in making random moves until a terminal state is reached
+		Two players take turns in making moves until a terminal state is reached
 		"""
 		assert len(players) == 2
+		for p in players:
+			p.set_board(self)
+
 		if not s:
 			s = self.empty_state()
 
-		players = [PlayerRandom(self) for _ in range(2)]
 		player_i = 2
 		s_prev = s
 		winners = set()
@@ -347,7 +385,10 @@ class Board:
 
 
 class PlayerABC(abc.ABC):
-	def __init__(self, board: Board):
+	def __init__(self, **kwargs):
+		self.Board: typing.Optional[Board] = None
+
+	def set_board(self, board: Board):
 		self.Board = board
 
 	def make_move(self, s, moves):
@@ -445,10 +486,18 @@ def number_to_base(n, b, length):
 	return tuple(digits[::-1])
 
 
+	
+def col_letter(i):
+	return chr(ord("A") + i)
+
+
+def row_number(i):
+	return i + 1
+
 
 def main():
 	b = Board(4)
-	b.play_game(players=[PlayerRandom(b), PlayerRandom(b)])
+	b.play_game(players=[PlayerRandom(), PlayerRandom()])
 
 
 if __name__ == "__main__":

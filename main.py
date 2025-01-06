@@ -61,9 +61,12 @@ class Board:
 		Visualize board state
 		"""
 		out = []
+		out.append("  ")
+		for i in range(self.N):
+			out.append("{} ".format(chr(ord("A") + i)))
 		for i, f in enumerate(s):
-			if i and not i % self.N:
-				out.append("\n")
+			if not i % self.N:
+				out.append("\n{:<2}".format(i // self.N + 1))
 			out.append(self.viz_tile(f))
 		return "".join(out)
 	

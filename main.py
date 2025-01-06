@@ -1,3 +1,4 @@
+import abc
 import typing
 import numpy as np
 import itertools
@@ -247,11 +248,11 @@ class Board:
 
 		return winners
 	
-	def iterate_moves(
+	def generate_possible_moves(
 		self, 
 		s, 
-		colors={1, 2}, 
-		moves={"p", "fr", "fc", "il", "ir", "it", "ib"},
+		colors=frozenset({1, 2}), 
+		moves=frozenset({"p", "fr", "fc", "il", "ir", "it", "ib"}),
 	) -> typing.Generator[typing.Tuple[typing.Tuple, typing.Tuple[int]]]:
 		"""
 		Iterate through all possible moves from a given state.
@@ -263,20 +264,36 @@ class Board:
 					if s[self.N*row+col] != 0:
 						# Not empty
 						continue
-					yield ((move, col, row, color), self.Moves[move](s, col, row, color))
+					s_next = self.Moves[move](s, col, row, color)
+					move_args = (move, col, row, color)
+					yield (move_args, s_next)
 			
 			# Flip
 			elif move in {"fr", "fc"}:
 				for i in range(self.N):
-					yield ((move, i), self.Moves[move](s, i))
+					s_next = self.Moves[move](s, i)
+					move_args = (move, i)
+					yield (move_args, s_next)
 			
 			# Insert
 			elif move in {"il", "ir", "it", "ib"}:
 				for i, color in itertools.product(range(self.N), colors):
-					yield ((move, i, color), self.Moves[move](s, i, color))
+					s_next = self.Moves[move](s, i, color)
+					move_args = (move, i, color)
+					yield (move_args, s_next)
 
 			else:
 				raise ValueError(f"Unknown move: {move}")
+			
+	def exclude_forbidden_moves(
+		self,
+		state_generator, 
+		forbidden_states=frozenset(),
+	) -> typing.Generator[typing.Tuple[typing.Tuple, typing.Tuple[int]]]:
+		for m, s in state_generator:
+			if s in forbidden_states:
+				continue
+			yield (m, s)
 
 	def describe_move(self, move, player):
 		m, *args = move
@@ -288,10 +305,60 @@ class Board:
 			args[1] = self.viz_tile(args[1])
 		return self.MoveDescription[m].format(*args, player=player)
 
+	def play_game(self, players: typing.Sized, s=None):
+		"""
+		Two players take turns in making random moves until a terminal state is reached
+		"""
+		assert len(players) == 2
+		if not s:
+			s = self.empty_state()
+
+		players = [PlayerRandom(self) for _ in range(2)]
+		player_i = 2
+		s_prev = s
+		winners = set()
+		print("New game.")
+		self.viz(s)
+		print()
+		while not winners:
+			player_i = (-player_i % 3)
+			moves = [
+				(move, s_next) 
+				for (move, s_next) in self.exclude_forbidden_moves(
+					self.generate_possible_moves(s, colors={player_i}), forbidden_states={s, s_prev}
+				)
+			]
+			move, s_next = players[player_i-1].make_move(s, moves)
+			print(self.describe_move(move, player_i))
+			print(self.viz(s_next))
+			print()
+
+			s_prev = s
+			s = s_next
+			winners = self.get_winners(s)
+
+		if len(winners) == 1:
+			print("Player {} wins!".format(winners.pop()))
+		else:
+			print("It's a tie!")
+
+
+class PlayerABC(abc.ABC):
+	def __init__(self, board: Board):
+		self.Board = board
+
+	def make_move(self, s, moves):
+		raise NotImplementedError()
+	
+
+class PlayerRandom(PlayerABC):
+	def make_move(self, s, moves):
+		return random.choice(moves)
+
 
 class GameGraph:
-	def __init__(self, board):
-		self.Board: Board = board
+	def __init__(self, board: Board):
+		self.Board = board
 		self.NormalizedStates = None
 		self.Graph = None
 		self.Terminals = None
@@ -353,7 +420,7 @@ class GameGraph:
 				self.Terminals[s] = winners
 				continue
 
-			for move, s_next in self.Board.iterate_moves(s):
+			for move, s_next in self.Board.generate_possible_moves(s):
 				s_next = self.normalize_state(s_next)
 				if s not in self.Graph:
 					self.Graph[s] = {}
@@ -362,40 +429,6 @@ class GameGraph:
 				# Add unexplored
 				if s_next not in self.Graph:
 					frontier.add(s_next)
-
-	def play_random_game(self, s=None):
-		"""
-		Two players take turns in making random moves until a terminal state is reached
-		"""
-		if not s:
-			s = self.Board.empty_state()
-
-		player = 2
-		s_prev = s
-		winners = set()
-		print("New game.")
-		self.Board.viz(s)
-		print()
-		while not winners:
-			player = (-player % 3)
-			moves = [
-				(move, s_next) 
-				for (move, s_next) in self.Board.iterate_moves(s, colors={player}) 
-				if s_next != s and s_next != s_prev
-			]
-			move, s_next = random.choice(moves)
-			print(self.Board.describe_move(move, player))
-			print(self.Board.viz(s_next))
-			print()
-
-			s_prev = s
-			s = s_next
-			winners = self.Board.get_winners(s)
-
-		if len(winners) == 1:
-			print("Player {} wins!".format(winners.pop()))
-		else:
-			print("It's a tie!")
 
 
 def number_to_base(n, b, length):
@@ -412,8 +445,7 @@ def number_to_base(n, b, length):
 
 def main():
 	b = Board(4)
-	gg = GameGraph(b)
-	gg.play_random_game()
+	b.play_game(players=[PlayerRandom(b), PlayerRandom(b)])
 
 
 if __name__ == "__main__":

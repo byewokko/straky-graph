@@ -247,25 +247,36 @@ class Board:
 
 		return winners
 	
-	def iterate_moves(self, s) -> typing.Generator[typing.Tuple[typing.Tuple, typing.Tuple[int]]]:
-		for move, do_move in self.Moves.items():
+	def iterate_moves(
+		self, 
+		s, 
+		colors={1, 2}, 
+		moves={"p", "fr", "fc", "il", "ir", "it", "ib"},
+	) -> typing.Generator[typing.Tuple[typing.Tuple, typing.Tuple[int]]]:
+		"""
+		Iterate through all possible moves from a given state.
+		"""
+		for move in moves:
 			# Place
 			if move == "p":
-				for col, row, color in itertools.product(range(self.N), range(self.N), {1, 2}):
+				for col, row, color in itertools.product(range(self.N), range(self.N), colors):
 					if s[self.N*row+col] != 0:
 						# Not empty
 						continue
-					yield ((move, col, row, color), do_move(s, col, row, color))
+					yield ((move, col, row, color), self.Moves[move](s, col, row, color))
 			
 			# Flip
 			elif move in {"fr", "fc"}:
 				for i in range(self.N):
-					yield ((move, i), do_move(s, i))
+					yield ((move, i), self.Moves[move](s, i))
 			
 			# Insert
 			elif move in {"il", "ir", "it", "ib"}:
-				for i, color in itertools.product(range(self.N), {1, 2}):
-					yield ((move, i, color), do_move(s, i, color))
+				for i, color in itertools.product(range(self.N), colors):
+					yield ((move, i, color), self.Moves[move](s, i, color))
+
+			else:
+				raise ValueError(f"Unknown move: {move}")
 
 	def describe_move(self, move, player):
 		m, *args = move
@@ -369,7 +380,7 @@ class GameGraph:
 			player = (-player % 3)
 			moves = [
 				(move, s_next) 
-				for (move, s_next) in self.Board.iterate_moves(s) 
+				for (move, s_next) in self.Board.iterate_moves(s, colors={player}) 
 				if s_next != s and s_next != s_prev
 			]
 			move, s_next = random.choice(moves)
